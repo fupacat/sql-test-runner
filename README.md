@@ -37,17 +37,39 @@ Dev Container
 
 ### Dev Container (recommended)
 
-1. Open this project in VS Code with the Dev Containers extension installed.
-2. VS Code will offer to **Reopen in Container** – accept.
-3. The SQL Server container starts automatically.
-4. Run the setup script once to initialise the database:
-   ```
-   sqlcmd -S localhost,1433 -U sa -P 'YourStrong!Passw0rd' -C -i scripts/setup-db.sql
-   ```
-5. Deploy tSQLt into the database (download `tSQLt.class.sql` from [tSQLt.org](https://tsqlt.org/)).
-6. Open a SQL file – the extension activates and discovers tests automatically.
+1. Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) in VS Code.
+2. Open this project and choose **Reopen in Container** when prompted.
+3. VS Code builds the custom SQL Server image and starts the container.
+4. **tSQLt is installed automatically** – the container's entrypoint:
+   - Creates `DevDb`
+   - Runs `PrepareServer.sql` (enables CLR, installs the tSQLt signing certificate)
+   - Downloads and runs `tSQLt.class.sql` from [tsqlt.org/downloads](https://tsqlt.org/downloads/)
+5. Once the container is healthy, the VS Code extension activates and discovers tests automatically.
 
-### Without Dev Container
+> **tSQLt license:** tSQLt is licensed under Apache 2.0.  
+> See [`third-party/tSQLt/LICENSE`](third-party/tSQLt/LICENSE) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
+### Manual tSQLt installation (without Dev Container)
+
+```bash
+# Set environment variables
+export SA_PASSWORD="YourStrong!Passw0rd"
+export SQL_SERVER="localhost,1433"
+export SQL_DATABASE="DevDb"
+
+# Run the install script (requires curl/wget and unzip)
+./scripts/install-tsqlt.sh
+```
+
+The script:
+1. Waits for SQL Server to be ready
+2. Creates the target database if needed
+3. Downloads tSQLt V1.1.8738.27883 from tsqlt.org
+4. Runs `PrepareServer.sql` (server-level, SA required, once per server)
+5. Runs `tSQLt.class.sql` (database-level install)
+6. Verifies the installed version
+
+### Without Dev Container (manual connection)
 
 Configure the connection string in VS Code settings:
 
@@ -97,6 +119,8 @@ When `sqlTestRunner.autoRunOnSave` is `true` (default), saving any `.sql` file u
 .devcontainer/          Dev container configuration
   devcontainer.json
   docker-compose.yml
+  Dockerfile             Custom SQL Server image with tSQLt auto-install
+  entrypoint.sh          Container startup: init DB, download & install tSQLt
 .github/workflows/      CI pipeline
   ci.yml
 db/
@@ -106,7 +130,12 @@ extension/              VS Code extension (TypeScript)
   src/                  Extension source
   test/                 Unit tests
 scripts/
-  setup-db.sql          Database initialisation
+  setup-db.sql          Database initialization (creates DevDb, enables CLR)
+  install-tsqlt.sh      Downloads and installs tSQLt from tsqlt.org
+third-party/
+  tSQLt/
+    LICENSE             Apache 2.0 license (tSQLt)
+THIRD-PARTY-NOTICES.md  Third-party software notices
 ```
 
 ## Development
