@@ -1,0 +1,6 @@
+extension/node_modules/
+extension/out/
+extension/*.vsix
+extension/.vscode-test/
+test-results/
+*.log
