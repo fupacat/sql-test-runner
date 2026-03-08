@@ -1,0 +1,438 @@
+name: Create Code Review Issues
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['copilot/review-current-project-state']
+
+permissions:
+  issues: write
+
+concurrency:
+  group: create-review-issues
+  cancel-in-progress: false
+jobs:
+  create-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create labels and issues from PR #1 code review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Ensure custom labels exist
+            const customLabels = [
+              { name: 'code-quality', color: '0075ca', description: 'Code quality improvements' },
+              { name: 'security',     color: 'e11d48', description: 'Security vulnerability or concern' },
+              { name: 'ci',           color: 'f97316', description: 'CI/CD pipeline related' },
+            ];
+            for (const label of customLabels) {
+              try {
+                // Check if the label already exists
+                await github.rest.issues.getLabel({ owner, repo, name: label.name });
+                // If getLabel succeeds, the label exists and we do nothing
+              } catch (e) {
+                if (e.status === 404) {
+                  // Label does not exist; create it
+                  await github.rest.issues.createLabel({ owner, repo, ...label });
+                } else {
+                  // Surface unexpected errors instead of silently ignoring them
+                  throw e;
+                }
+              }
+            }
+
+            async function createIfAbsent(title, body, labels) {
+              // Use the search API with pagination to find an exact title match
+              const escaped = title.replace(/"/g, '\\"');
+              const q = `repo:${owner}/${repo} is:issue in:title "${escaped}"`;
+              const per_page = 100;
+              let page = 1;
+
+              while (true) {
+                const searchResult = await github.rest.search.issuesAndPullRequests({ q, per_page, page });
+                const items = searchResult.data.items || [];
+                const exactMatch = items.some(i => i.title === title);
+                if (exactMatch) {
+                  console.log(`Skipping already-existing issue: ${title}`);
+                  return;
+                }
+                if (items.length < per_page) {
+                  break;
+                }
+                page += 1;
+              }
+              const result = await github.rest.issues.create({ owner, repo, title, body, labels });
+              console.log(`Created #${result.data.number}: ${title}`);
+            }
+
+            const issues = [
+              {
+                title: '[Bug] File watcher uses stale configuration — autoRunOnSave changes not respected',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  'The `config` object in `setupFileWatcher` is captured once at activation time.',
+                  'If the user later changes `sqlTestRunner.autoRunOnSave`, the file watcher',
+                  'callbacks continue to use the old value and will not respect the new setting.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/extension.ts` line 197:',
+                  '```typescript',
+                  'fileWatcher.onDidChange(async (uri) => {',
+                  '    if (!config.autoRunOnSave) { return; }  // stale — captured at setup time',
+                  '```',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Re-read configuration inside the callbacks:',
+                  '```typescript',
+                  'fileWatcher.onDidChange(async (uri) => {',
+                  '    const currentConfig = getConfig();',
+                  '    if (!currentConfig.autoRunOnSave) { return; }',
+                  '```',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] StateManager.startWatching() has a race condition on initial branch read',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`startWatching()` calls `updateCurrentBranch()` without awaiting it.',
+                  'If the 30-second interval fires before the async read completes,',
+                  '`checkBranchChange()` sees a transition from `""` to the real branch name',
+                  'and incorrectly prompts the user to rebuild or sync immediately after activation.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/stateManager.ts` line 33:',
+                  '```typescript',
+                  'startWatching(): void {',
+                  '    this.updateCurrentBranch(); // not awaited',
+                  '    this.branchPollInterval = setInterval(() => {',
+                  '        this.checkBranchChange();',
+                  '    }, 30000);',
+                  '}',
+                  '```',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  '```typescript',
+                  'async startWatching(): Promise<void> {',
+                  '    await this.updateCurrentBranch();',
+                  '    this.branchPollInterval = setInterval(() => {',
+                  '        this.checkBranchChange();',
+                  '    }, 30000);',
+                  '}',
+                  '```',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Docs] CiModeRunner JSDoc says it "drops the database" but the implementation does not',
+                labels: ['documentation', 'bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  'The JSDoc for `CiModeRunner` says it "drops the database, publishes the full DACPAC,',
+                  'runs all tests, and writes a JUnit XML report." However, `run()` never drops or',
+                  'recreates the database — it only optionally publishes a DACPAC.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/ciMode.ts` line 20 — comment does not match implementation.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Either implement the drop/recreate step, or update the comment:',
+                  '```typescript',
+                  '/**',
+                  ' * CI mode: optionally publishes a DACPAC, runs all tSQLt tests,',
+                  ' * and writes a JUnit XML report.',
+                  ' */',
+                  '```',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] Level 2 object→test mapping never works because the reverse index is never populated',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`onSqlFileSaved` calls `objectMapper.getTestsForObject(sqlObj.name)` for the',
+                  'Level 2 reverse-index lookup, but `ObjectMapper.indexTestFile` / `indexTestContent`',
+                  '(the methods that build the reverse index) are never called anywhere in the extension.',
+                  '`getTestsForObject` therefore always returns an empty array, and the code silently',
+                  'falls back to the Level 1 heuristic.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/extension.ts` line 233 — `objectMapper.getTestsForObject` is called',
+                  'but `objectMapper.indexTestContent` / `indexTestFile` are never invoked.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Populate the reverse index during test discovery or when test files are deployed.',
+                  'For example, after discovering test cases, call `objectMapper.indexTestFile(path, fullName)`',
+                  'for each test SQL file found under `db/tests/`.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] Invalid tSQLt assertion in db/tests/CustomerTests.sql',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`tSQLt.AssertEqualsTable` expects two **table name strings**. The sample test passes',
+                  'a `SELECT` expression as the first argument, which is invalid and will error at runtime.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`db/tests/CustomerTests.sql` line 38:',
+                  '```sql',
+                  "EXEC tSQLt.AssertEqualsTable '(SELECT TOP 0 * FROM #Actual)', '#Actual';",
+                  '```',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Use `tSQLt.AssertEmptyTable` if the intent is to assert no rows:',
+                  '```sql',
+                  "EXEC tSQLt.AssertEmptyTable '#Actual';",
+                  '```',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Code Quality] Unused `discovery` parameter in setupFileWatcher and onSqlFileSaved',
+                labels: ['code-quality'],
+                body: [
+                  '## Summary',
+                  '',
+                  'Both `setupFileWatcher` and `onSqlFileSaved` in `extension/src/extension.ts` accept a',
+                  '`discovery: TestDiscovery` parameter, but neither function uses it. This dead code',
+                  'misleads readers and may be flagged by ESLint as an unused parameter.',
+                  '',
+                  '## Affected locations',
+                  '',
+                  '- `extension/src/extension.ts` line 180 (`setupFileWatcher`)',
+                  '- `extension/src/extension.ts` line 212 (`onSqlFileSaved`)',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Either use the parameter (e.g. call `discovery.discoverAll()` after deploying a test',
+                  'file), or remove it from both functions and their callsites.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Code Quality] CiModeRunner accepts a TestRunner in its constructor but never uses it',
+                labels: ['code-quality', 'bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`CiModeRunner` stores a `testRunner: TestRunner` dependency but `run()` never delegates',
+                  'to it. Test execution is duplicated directly via `this.connection.query(...)`, bypassing',
+                  "the TestRunner's result-mapping and VS Code TestRun integration.",
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/ciMode.ts` line 25 — `testRunner` is stored but never referenced.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Either remove `testRunner` from the constructor, or delegate test execution to it.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Code Quality] CiModeOptions.sqlcmdPath is defined but never used in ciMode.ts',
+                labels: ['code-quality'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`CiModeOptions` includes a `sqlcmdPath` field, but `CiModeRunner` never references it.',
+                  'The `publishDacpac` method hard-codes `sqlpackage` without making the path configurable.',
+                  'This creates a misleading configuration surface.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/src/ciMode.ts` line 12 — `sqlcmdPath` is in the interface but unused.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Either remove `sqlcmdPath` from `CiModeOptions` (and its callsite in `extension.ts`),',
+                  'or use it to make the `sqlpackage` tool path configurable.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] sqlTestRunner.runClass command is contributed in package.json but has no registered handler',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`extension/package.json` contributes `sqlTestRunner.runClass` as a VS Code command,',
+                  'but there is no `vscode.commands.registerCommand("sqlTestRunner.runClass", ...)` call',
+                  'in the extension activation code. Invoking this command will fail silently.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`extension/package.json` line 64 — command contributed but handler not registered.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Either add a command handler in `activate()`, or remove the contribution from `package.json`.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] TSQLT_VERSION env var is documented but ignored in install-tsqlt.sh',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`scripts/install-tsqlt.sh` documents `TSQLT_VERSION` as an env-var override,',
+                  'but `resolve_download_url()` ignores it and always uses a hard-pinned URL.',
+                  'Setting `TSQLT_VERSION` has no effect.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Wire `TSQLT_VERSION` into URL construction or remove it from the documentation.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] install-tsqlt.sh comments reference a --TSQLT_DOWNLOAD_URL CLI flag that does not exist',
+                labels: ['bug', 'documentation'],
+                body: [
+                  '## Summary',
+                  '',
+                  'A comment in `resolve_download_url()` refers to a `--TSQLT_DOWNLOAD_URL` CLI flag.',
+                  'The script only parses `--server`, `--database`, `--user`, and `--password`.',
+                  'No such flag exists.',
+                  '',
+                  'The `TSQLT_DOWNLOAD_URL` *environment variable* does work, but it is not a CLI argument.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Update the comment to reference the environment variable, or add a proper CLI flag.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] CI workflow artifact upload path is incorrect — test results are never uploaded',
+                labels: ['bug', 'ci'],
+                body: [
+                  '## Summary',
+                  '',
+                  'The "Upload test results" step in `.github/workflows/ci.yml` targets',
+                  '`extension/test-results/`. The unit tests do not write any files there, and the',
+                  'CI-mode JUnit output goes to `test-results/junit.xml` at the repo root.',
+                  'The upload step is always empty.',
+                  '',
+                  '## Root Cause',
+                  '',
+                  '`.github/workflows/ci.yml` line 47:',
+                  '```yaml',
+                  '    path: extension/test-results/   # wrong — nothing is written here',
+                  '```',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Fix the path to `test-results/`, or remove the step if no file artifacts are produced.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Bug] Dockerfile ENV uses shell-style default expansion that is not supported',
+                labels: ['bug'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`.devcontainer/Dockerfile` sets:',
+                  '```dockerfile',
+                  'ENV SA_PASSWORD="${SA_PASSWORD:-YourStrong!Passw0rd}"',
+                  '```',
+                  'The `${VAR:-default}` syntax is a Bash construct and is **not** expanded by the',
+                  'Dockerfile `ENV` instruction. `SA_PASSWORD` is set to the literal string',
+                  '`${SA_PASSWORD:-YourStrong!Passw0rd}` instead of the intended default.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Use a plain default value:',
+                  '```dockerfile',
+                  'ENV SA_PASSWORD=YourStrong!Passw0rd',
+                  '```',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Code Quality] @xmldom/xmldom is listed in both devDependencies and dependencies',
+                labels: ['code-quality'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`@xmldom/xmldom` appears in both `devDependencies` and `dependencies` in',
+                  '`extension/package.json`. Since it is used at runtime by `src/resultParser.ts`,',
+                  'it must be in `dependencies`. The duplication in `devDependencies` is redundant',
+                  'and could cause version drift.',
+                  '',
+                  '## Suggested Fix',
+                  '',
+                  'Remove `@xmldom/xmldom` from `devDependencies`.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+              {
+                title: '[Security] install-tsqlt.sh downloads and executes a remote ZIP without integrity verification',
+                labels: ['security'],
+                body: [
+                  '## Summary',
+                  '',
+                  '`scripts/install-tsqlt.sh` downloads a tSQLt ZIP from `tsqlt.org` (or an overridden',
+                  '`TSQLT_DOWNLOAD_URL`) and executes the contained SQL with `sa` (sysadmin) privileges,',
+                  'without verifying any checksum or signature.',
+                  '',
+                  'An attacker who can compromise the download endpoint could deliver a tampered archive',
+                  'containing arbitrary SQL executed against the server with full admin rights.',
+                  '',
+                  '## Risk',
+                  '',
+                  '- **Threat**: Compromised or spoofed download endpoint',
+                  '- **Impact**: Arbitrary SQL execution with `sa` privileges during environment setup',
+                  '',
+                  '## Suggested Mitigation',
+                  '',
+                  '1. Verify the downloaded archive against a pinned SHA-256 checksum.',
+                  '2. Restrict `TSQLT_DOWNLOAD_URL` overrides to trusted domains.',
+                  '',
+                  '_Identified in code review of PR #1 (not addressed before merge)._',
+                ].join('\n'),
+              },
+            ];
+
+            for (const issue of issues) {
+              await createIfAbsent(issue.title, issue.body, issue.labels);
+            }
