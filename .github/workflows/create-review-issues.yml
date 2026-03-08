@@ -8,6 +8,9 @@ on:
 permissions:
   issues: write
 
+concurrency:
+  group: create-review-issues
+  cancel-in-progress: false
 jobs:
   create-issues:
     runs-on: ubuntu-latest
