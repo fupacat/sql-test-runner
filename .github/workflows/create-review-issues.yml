@@ -34,10 +34,12 @@ jobs:
             }
 
             async function createIfAbsent(title, body, labels) {
-              const existing = await github.rest.issues.listForRepo({
-                owner, repo, state: 'open', per_page: 100
-              });
-              if (existing.data.some(i => i.title === title)) {
+              // Use the search API to find an exact title match without pagination limits
+              const escaped = title.replace(/"/g, '\\"');
+              const q = `repo:${owner}/${repo} is:issue in:title "${escaped}"`;
+              const searchResult = await github.rest.search.issuesAndPullRequests({ q });
+              const exactMatch = searchResult.data.items.some(i => i.title === title);
+              if (exactMatch) {
                 console.log(`Skipping already-existing issue: ${title}`);
                 return;
               }
