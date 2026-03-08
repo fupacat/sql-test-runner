@@ -27,9 +27,17 @@ jobs:
             ];
             for (const label of customLabels) {
               try {
-                await github.rest.issues.createLabel({ owner, repo, ...label });
+                // Check if the label already exists
+                await github.rest.issues.getLabel({ owner, repo, name: label.name });
+                // If getLabel succeeds, the label exists and we do nothing
               } catch (e) {
-                if (e.status !== 422) throw e;
+                if (e.status === 404) {
+                  // Label does not exist; create it
+                  await github.rest.issues.createLabel({ owner, repo, ...label });
+                } else {
+                  // Surface unexpected errors instead of silently ignoring them
+                  throw e;
+                }
               }
             }
 
