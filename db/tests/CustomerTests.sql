@@ -35,6 +35,6 @@ BEGIN
     INSERT INTO #Actual
     EXEC dbo.GetCustomer @CustomerId = 999;
 
-    EXEC tSQLt.AssertEqualsTable (SELECT TOP 0 * FROM #Actual), #Actual;
+    EXEC tSQLt.AssertEmptyTable '#Actual';
 END
 GO
