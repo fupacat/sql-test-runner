@@ -108,8 +108,8 @@ resolve_download_url() {
   fi
 
   # Pinned to the latest stable release: V1.1.8738.27883 (2022-02-16).
-  # To upgrade, update this URL and set TSQLT_VERSION accordingly, or pass
-  # --TSQLT_DOWNLOAD_URL with your preferred URL at runtime.
+  # To upgrade, update this URL and set TSQLT_VERSION accordingly, or set
+  # the TSQLT_DOWNLOAD_URL environment variable to your preferred URL at runtime.
   echo "https://tsqlt.org/downloads/?file=tSQLt_V1.1.8738.27883.zip"
 }
 
