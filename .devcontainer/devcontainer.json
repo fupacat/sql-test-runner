@@ -1,0 +1,20 @@
+{
+  "name": "SQL Test Runner Dev Container",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "vscode",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-mssql.mssql",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "sqlTestRunner.connectionString": "Server=sqlserver,1433;Database=DevDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=true",
+        "sqlTestRunner.sqlcmdPath": "sqlcmd"
+      }
+    }
+  },
+  "postCreateCommand": "cd /workspace/extension && npm install && echo 'Dev container ready. tSQLt is pre-installed in the sqlserver container.'",
+  "remoteUser": "vscode"
+}

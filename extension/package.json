@@ -1,0 +1,106 @@
+{
+  "name": "sql-test-runner",
+  "displayName": "SQL Test Runner (tSQLt)",
+  "description": "Integrated tSQLt test runner for VS Code with file watching, incremental deployment, and inline diagnostics",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "sql",
+    "tsqlt",
+    "testing",
+    "sql-server",
+    "mssql"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.sql"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SQL Test Runner",
+      "properties": {
+        "sqlTestRunner.connectionString": {
+          "type": "string",
+          "default": "Server=localhost,1433;Database=DevDb;User Id=sa;Password=<YOUR_SA_PASSWORD>;TrustServerCertificate=true",
+          "description": "SQL Server connection string"
+        },
+        "sqlTestRunner.sqlcmdPath": {
+          "type": "string",
+          "default": "sqlcmd",
+          "description": "Path to sqlcmd executable"
+        },
+        "sqlTestRunner.autoRunOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run affected tests when a SQL file is saved"
+        },
+        "sqlTestRunner.dacpacPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the DACPAC file for CI full-rebuild mode"
+        },
+        "sqlTestRunner.junitOutputPath": {
+          "type": "string",
+          "default": "test-results/junit.xml",
+          "description": "Output path for JUnit XML results (CI mode)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "sqlTestRunner.runAll",
+        "title": "SQL Test Runner: Run All Tests"
+      },
+      {
+        "command": "sqlTestRunner.runClass",
+        "title": "SQL Test Runner: Run Test Class"
+      },
+      {
+        "command": "sqlTestRunner.ciRebuildAndTest",
+        "title": "SQL Test Runner: Full Rebuild & Test (CI Mode)"
+      },
+      {
+        "command": "sqlTestRunner.refreshTests",
+        "title": "SQL Test Runner: Refresh Test Discovery"
+      },
+      {
+        "command": "sqlTestRunner.resetDatabase",
+        "title": "SQL Test Runner: Reset Database"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./test/runUnitTests.js",
+    "test:vscode": "node ./out/test/runTests.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/mssql": "^9.1.9",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@xmldom/xmldom": "^0.8.11",
+    "eslint": "^8.56.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.11",
+    "mssql": "^10.0.4"
+  }
+}
