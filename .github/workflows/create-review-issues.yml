@@ -1,6 +1,7 @@
 name: Create Code Review Issues
 
 on:
+  workflow_dispatch:
   push:
     branches: ['copilot/review-current-project-state']
 
