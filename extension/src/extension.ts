@@ -129,6 +129,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }),
 
+        vscode.commands.registerCommand('sqlTestRunner.runClass', async () => {
+            const classes: string[] = [];
+            controller.items.forEach(item => classes.push(item.id));
+
+            if (classes.length === 0) {
+                vscode.window.showWarningMessage(
+                    'SQL Test Runner: No test classes found. Run "Refresh Tests" first.'
+                );
+                return;
+            }
+
+            const selected = await vscode.window.showQuickPick(classes, {
+                placeHolder: 'Select a test class to run'
+            });
+            if (!selected) { return; }
+
+            const classItem = controller.items.get(selected);
+            if (!classItem) {
+                vscode.window.showErrorMessage(
+                    `SQL Test Runner: Test class "${selected}" not found. Try refreshing tests.`
+                );
+                return;
+            }
+
+            const run = controller.createTestRun(new vscode.TestRunRequest());
+            try {
+                run.started(classItem);
+                classItem.children.forEach(child => run.started(child));
+                await runner.runClass(run, selected);
+            } catch (err) {
+                outputChannel.appendLine(`Run class error: ${err}`);
+                vscode.window.showErrorMessage(`SQL Test Runner: ${err}`);
+            } finally {
+                run.end();
+            }
+        }),
+
         vscode.commands.registerCommand('sqlTestRunner.resetDatabase', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'This will reset the dev database. Are you sure?',
