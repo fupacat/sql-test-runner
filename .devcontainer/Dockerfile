@@ -28,7 +28,7 @@ RUN chmod +x /opt/sql-setup/entrypoint.sh
 # Switch back to mssql user for security
 USER mssql
 
-ENV SA_PASSWORD="${SA_PASSWORD:-YourStrong!Passw0rd}"
+ENV SA_PASSWORD=YourStrong!Passw0rd
 ENV SQL_DATABASE="DevDb"
 
 ENTRYPOINT ["/opt/sql-setup/entrypoint.sh"]
