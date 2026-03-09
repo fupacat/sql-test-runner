@@ -14,7 +14,6 @@
 #   SA_PASSWORD      SA password (default: YourStrong!Passw0rd)
 #   SQL_SERVER       SQL Server host,port (default: localhost,1433)
 #   SQL_DATABASE     Target database name (default: DevDb)
-#   TSQLT_VERSION    Specific tSQLt version tag to download (default: latest)
 #   TSQLT_DOWNLOAD_URL  Override the full download URL
 
 set -euo pipefail
@@ -25,7 +24,6 @@ set -euo pipefail
 SA_PASSWORD="${SA_PASSWORD:-YourStrong!Passw0rd}"
 SQL_SERVER="${SQL_SERVER:-localhost,1433}"
 SQL_DATABASE="${SQL_DATABASE:-DevDb}"
-TSQLT_VERSION="${TSQLT_VERSION:-latest}"
 TSQLT_DOWNLOAD_URL="${TSQLT_DOWNLOAD_URL:-}"
 
 INSTALL_DIR="/tmp/tsqlt-install"
@@ -108,8 +106,8 @@ resolve_download_url() {
   fi
 
   # Pinned to the latest stable release: V1.1.8738.27883 (2022-02-16).
-  # To upgrade, update this URL and set TSQLT_VERSION accordingly, or pass
-  # --TSQLT_DOWNLOAD_URL with your preferred URL at runtime.
+  # To upgrade, update this URL or set TSQLT_DOWNLOAD_URL to your preferred
+  # URL at runtime.
   echo "https://tsqlt.org/downloads/?file=tSQLt_V1.1.8738.27883.zip"
 }
 
@@ -203,7 +201,6 @@ main() {
   log "=== tSQLt Automatic Installer ==="
   log "Target server:   $SQL_SERVER"
   log "Target database: $SQL_DATABASE"
-  log "tSQLt version:   ${TSQLT_VERSION}"
   echo ""
 
   wait_for_sql
